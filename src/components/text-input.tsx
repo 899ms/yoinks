@@ -14,6 +14,8 @@ type Props = {
   history?: string[]
   /** when a paste into an empty field satisfies this, submit immediately */
   submitOnPaste?: (value: string) => boolean
+  /** tab pressed — accept a suggestion, etc. */
+  onTab?: () => void
 }
 
 const wordLeft = (text: string, from: number) => {
@@ -44,6 +46,7 @@ export function TextInput({
   width = 40,
   history = [],
   submitOnPaste,
+  onTab,
 }: Props) {
   const [cursorState, setCursorState] = useState(value.length)
   const [anchorState, setAnchorState] = useState<number | null>(null)
@@ -86,7 +89,11 @@ export function TextInput({
       onSubmit?.(value)
       return
     }
-    if (key.tab || key.pageUp || key.pageDown) return
+    if (key.tab) {
+      onTab?.()
+      return
+    }
+    if (key.pageUp || key.pageDown) return
     if (key.escape) {
       setAnchorState(null)
       return

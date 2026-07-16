@@ -41,7 +41,7 @@ const initialUrl = args.find(arg => !arg.startsWith('-'))
 
 const isTTY = Boolean(process.stdout.isTTY)
 
-// no url given — prefill the prompt when the clipboard already holds one
+// no url given — offer the clipboard url (⇥ to paste) when it already holds one
 let clipboardUrl: string | undefined
 if (!initialUrl && isTTY) {
   const clipped = readClipboard().trim()

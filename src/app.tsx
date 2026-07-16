@@ -101,7 +101,7 @@ export function App({
   const {exit} = useApp()
   const {stdout} = useStdout()
   const [url, setUrl] = useState(initialUrl ?? '')
-  const [urlInput, setUrlInput] = useState(clipboardUrl ?? '')
+  const [urlInput, setUrlInput] = useState('')
   const [history, setHistory] = useState(loadHistory)
   const [platform, setPlatform] = useState<Platform>()
   const [info, setInfo] = useState<VideoInfo>()
@@ -184,8 +184,9 @@ export function App({
   // below it.
   const rows = stdout?.rows ?? 24
   const buttonW = frameButtonWidth(YOINK_BUTTON)
-  const noteRow =
-    phase.name === 'input' && (phase.warning || (clipboardUrl && urlInput === clipboardUrl)) ? 1 : 0
+  const clipboardOffered = Boolean(clipboardUrl) && urlInput === ''
+  const clipboardAccepted = Boolean(clipboardUrl) && urlInput === clipboardUrl
+  const noteRow = phase.name === 'input' && (phase.warning || clipboardOffered || clipboardAccepted) ? 1 : 0
   const contentHeight = 7 + 3 + noteRow + 2 + 1
   const frameTop = Math.floor((rows - 1 - contentHeight) / 2) + 7 + 1
   const buttonLeft = Math.floor((columns - (boxWidth + buttonW)) / 2) + boxWidth + 1
@@ -258,11 +259,16 @@ export function App({
               width={boxWidth - 6}
               history={history}
               submitOnPaste={isProbablyUrl}
+              onTab={() => {
+                if (clipboardOffered) setUrlInput(clipboardUrl!)
+              }}
             />
           </FramedInput>
           {phase.warning ? (
             <Text color={theme.gray}>✗ {phase.warning}</Text>
-          ) : clipboardUrl && urlInput === clipboardUrl ? (
+          ) : clipboardOffered ? (
+            <Text color={theme.gray}>link in your clipboard — ⇥ to paste it</Text>
+          ) : clipboardAccepted ? (
             <Text color={theme.gray}>from your clipboard — ↵ to yoink it</Text>
           ) : null}
         </Box>
