@@ -243,7 +243,7 @@ export function App({
     <FullScreen>
       <Logo />
       <Gap />
-      <Text color={theme.primary}>yoink any video. no shady ads.</Text>
+      <Text color={theme.primary}>yoink any video. paste. yoink. done.</Text>
       <Text color={theme.gray}>youtube · x · instagram · threads · tiktok · +1800 more</Text>
       <Gap />
 

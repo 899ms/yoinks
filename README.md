@@ -7,7 +7,7 @@
 | |_| | (_) | | | | |   <\__ \
  \__, |\___/|_|_| |_|_|\_\___/
  |___/
-     yoink any video. no shady ads.
+     yoink any video. paste. yoink. done.
 ```
 
 Download videos from YouTube, X/Twitter, Instagram, Threads, TikTok and

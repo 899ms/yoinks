@@ -7,7 +7,7 @@ import {isProbablyUrl} from './lib/platforms.js'
 const VERSION = '0.1.0'
 
 const HELP = `
-  yoinks — yoink any video. no shady ads.
+  yoinks — yoink any video. paste. yoink. done.
 
   Usage
     $ yoinks [url]

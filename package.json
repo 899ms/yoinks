@@ -1,7 +1,7 @@
 {
   "name": "yoinks",
   "version": "0.1.0",
-  "description": "yoink any video from YouTube, X, Instagram, Threads & 1800+ sites — right from your terminal. no shady ads.",
+  "description": "yoink any video from YouTube, X, Instagram, Threads & 1800+ sites — right from your terminal. paste. yoink. done.",
   "type": "module",
   "bin": {
     "yoinks": "dist/cli.js"
