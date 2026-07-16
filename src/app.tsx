@@ -68,14 +68,20 @@ const HINTS: Record<Phase['name'], Array<[string, string]>> = {
     ['↵', 'yoink'],
     ['^c', 'quit'],
   ],
-  probing: [['^c', 'quit']],
+  probing: [
+    ['esc', 'cancel'],
+    ['^c', 'quit'],
+  ],
   picking: [
     ['↑↓', 'choose'],
     ['↵', 'yoink'],
     ['esc', 'back'],
     ['^c', 'quit'],
   ],
-  downloading: [['^c', 'quit']],
+  downloading: [
+    ['esc', 'cancel'],
+    ['^c', 'quit'],
+  ],
   done: [['^c', 'quit']],
   error: [
     ['↵', 'try again'],
@@ -102,25 +108,32 @@ export function App({
   const [choices, setChoices] = useState<DownloadChoice[]>([])
   const ytdlpRef = useRef('')
   const infoJsonRef = useRef<string | undefined>(undefined)
+  const abortRef = useRef<AbortController | undefined>(undefined)
   const [phase, setPhase] = useState<Phase>(initialUrl ? {name: 'probing', status: 'warming up…'} : {name: 'input'})
 
   const columns = stdout?.columns ?? 80
   const boxWidth = Math.min(64, columns - 6)
 
   const startProbe = useCallback(async (targetUrl: string) => {
+    const controller = new AbortController()
+    abortRef.current = controller
     setPlatform(detectPlatform(targetUrl))
     setPhase({name: 'probing', status: 'warming up…'})
     try {
       const ytdlp =
-        ytdlpRef.current || (await ensureYtDlp(status => setPhase({name: 'probing', status})))
+        ytdlpRef.current ||
+        (await ensureYtDlp(status => setPhase({name: 'probing', status}), controller.signal))
       ytdlpRef.current = ytdlp
+      if (controller.signal.aborted) return
       setPhase({name: 'probing', status: 'fetching video info…'})
-      const {info: videoInfo, infoJsonPath} = await probe(ytdlp, targetUrl)
+      const {info: videoInfo, infoJsonPath} = await probe(ytdlp, targetUrl, controller.signal)
+      if (controller.signal.aborted) return
       infoJsonRef.current = infoJsonPath
       setInfo(videoInfo)
       setChoices(buildChoices(videoInfo))
       setPhase({name: 'picking'})
     } catch (error) {
+      if (controller.signal.aborted) return
       setPhase({name: 'error', message: error instanceof Error ? error.message : String(error)})
     }
   }, [])
@@ -138,9 +151,16 @@ export function App({
     setPhase({name: 'input'})
   }, [])
 
+  const cancelRun = useCallback(() => {
+    abortRef.current?.abort()
+    resetToInput()
+    setUrlInput(url) // keep the link around so a cancel isn't destructive
+  }, [resetToInput, url])
+
   useInput(
     (_input, key) => {
       if (key.escape && (phase.name === 'picking' || phase.name === 'error')) resetToInput()
+      if (key.escape && (phase.name === 'probing' || phase.name === 'downloading')) cancelRun()
       if (key.return && (phase.name === 'error' || phase.name === 'done')) resetToInput()
     },
     {isActive: Boolean(process.stdin.isTTY)},
@@ -181,6 +201,8 @@ export function App({
 
   const handlePick = (item: {value: number}) => {
     const choice = choices[item.value]
+    const controller = new AbortController()
+    abortRef.current = controller
     setPhase({name: 'downloading', choice, processing: false})
     void (async () => {
       const handlers = {
@@ -195,16 +217,18 @@ export function App({
         let filepath: string
         try {
           // reuse the probe's metadata — starts immediately instead of re-extracting
-          filepath = await download({...base, infoJsonPath: infoJsonRef.current}, handlers)
-        } catch {
+          filepath = await download({...base, infoJsonPath: infoJsonRef.current}, handlers, controller.signal)
+        } catch (error) {
+          if (controller.signal.aborted) throw error
           // media urls in the cached info can expire — retry with a fresh extraction
           setPhase(prev => (prev.name === 'downloading' ? {...prev, progress: undefined} : prev))
-          filepath = await download(base, handlers)
+          filepath = await download(base, handlers, controller.signal)
         }
         onOutcome({filepath})
         setHistory(addToHistory(url))
         setPhase({name: 'done', filepath})
       } catch (error) {
+        if (controller.signal.aborted) return
         setPhase({name: 'error', message: error instanceof Error ? error.message : String(error)})
       }
     })()

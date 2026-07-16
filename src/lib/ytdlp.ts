@@ -36,7 +36,7 @@ function commandWorks(cmd: string, args: string[]): Promise<boolean> {
  * Resolve a usable yt-dlp binary: system install first, then a previously
  * downloaded copy, then download the standalone binary from GitHub releases.
  */
-export async function ensureYtDlp(onStatus: (message: string) => void): Promise<string> {
+export async function ensureYtDlp(onStatus: (message: string) => void, signal?: AbortSignal): Promise<string> {
   if (await commandWorks('yt-dlp', ['--version'])) return 'yt-dlp'
 
   const local = path.join(YOINKS_DIR, process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp')
@@ -46,13 +46,13 @@ export async function ensureYtDlp(onStatus: (message: string) => void): Promise<
   await fs.mkdir(YOINKS_DIR, {recursive: true})
 
   const url = `${RELEASE_BASE}/${ytDlpAssetName()}`
-  const response = await fetch(url)
+  const response = await fetch(url, {signal})
   if (!response.ok || !response.body) {
     throw new Error(`Could not download yt-dlp (${response.status}). Check your connection and try again.`)
   }
 
   const tmp = `${local}.download`
-  await pipeline(Readable.fromWeb(response.body as never), createWriteStream(tmp))
+  await pipeline(Readable.fromWeb(response.body as never), createWriteStream(tmp), {signal})
   await fs.chmod(tmp, 0o755)
   await fs.rename(tmp, local)
   return local
@@ -103,9 +103,9 @@ export type ProbeResult = {
   infoJsonPath: string
 }
 
-export async function probe(ytdlp: string, url: string): Promise<ProbeResult> {
+export async function probe(ytdlp: string, url: string, signal?: AbortSignal): Promise<ProbeResult> {
   const stdout = await new Promise<string>((resolve, reject) => {
-    const child = spawn(ytdlp, ['-J', '--no-playlist', '--no-warnings', url])
+    const child = spawn(ytdlp, ['-J', '--no-playlist', '--no-warnings', url], {signal})
     let out = ''
     let stderr = ''
     child.stdout.on('data', chunk => (out += chunk))
@@ -224,6 +224,7 @@ export function download(
     outDir: string
   },
   handlers: DownloadHandlers,
+  signal?: AbortSignal,
 ): Promise<string> {
   const args = [
     ...(opts.infoJsonPath ? ['--load-info-json', opts.infoJsonPath] : [opts.url]),
@@ -246,7 +247,7 @@ export function download(
   if (opts.ffmpegLocation) args.push('--ffmpeg-location', opts.ffmpegLocation)
 
   return new Promise((resolve, reject) => {
-    const child = spawn(opts.ytdlp, args)
+    const child = spawn(opts.ytdlp, args, {signal})
     activeChild = child
 
     let stderr = ''
@@ -254,6 +255,8 @@ export function download(
     let part = 0
     let lastDownloaded = 0
     let buffer = ''
+    // every file yt-dlp writes this run, so a cancel can clean up after itself
+    const destinations: string[] = []
 
     child.stdout.on('data', (chunk: Buffer) => {
       buffer += chunk.toString()
@@ -275,7 +278,13 @@ export function download(
             part,
           })
         } else if (line.includes('[Merger]') || line.includes('[ExtractAudio]')) {
+          const merging = /^\[Merger\] Merging formats into "(.+)"$/.exec(line)?.[1]
+          const extracting = /^\[ExtractAudio\] Destination: (.+)$/.exec(line)?.[1]
+          const target = merging ?? extracting
+          if (target) destinations.push(target)
           handlers.onProcessing()
+        } else if (line.startsWith('[download] Destination: ')) {
+          destinations.push(line.slice('[download] Destination: '.length))
         } else if (path.isAbsolute(line)) {
           filepath = line
         }
@@ -285,6 +294,12 @@ export function download(
     child.on('error', reject)
     child.on('close', code => {
       activeChild = undefined
+      if (signal?.aborted) {
+        // cancelled on purpose — don't leave half-written files behind
+        void removePartials(destinations)
+        reject(new Error('Download cancelled.'))
+        return
+      }
       if (code === 0 && filepath) {
         resolve(filepath)
       } else {
@@ -292,6 +307,14 @@ export function download(
       }
     })
   })
+}
+
+function removePartials(destinations: string[]): Promise<unknown> {
+  return Promise.allSettled(
+    destinations
+      .flatMap(dest => [dest, `${dest}.part`, `${dest}.ytdl`])
+      .map(file => fs.rm(file, {force: true})),
+  )
 }
 
 function toNumber(value: string | undefined): number | undefined {
