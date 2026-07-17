@@ -29,7 +29,13 @@ export function FullScreen({children}: {children: ReactNode}) {
       justifyContent="center"
       backgroundColor={theme.background}
     >
-      {children}
+      {/* single wrapper so centering leftover lands on ONE node: when the
+          leftover is odd, yoga gives every direct child a *.5 y-position and
+          rounds each one independently — spacer rows collapse into their
+          neighbors while extra blanks open up elsewhere */}
+      <Box flexDirection="column" alignItems="center" flexShrink={0}>
+        {children}
+      </Box>
     </Box>
   )
 }
