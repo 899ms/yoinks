@@ -425,7 +425,6 @@ function AppContent({
 
         {phase.name === 'downloading' && (
           <Box flexDirection="column" alignItems="center">
-            <Gap />
             <Text color={theme.gray} dimColor={theme.dimSecondary}>
               {info?.title ? `${truncate(info.title, 42)} · ` : ''}
               {phase.choice.label}
