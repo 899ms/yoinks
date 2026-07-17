@@ -61,7 +61,11 @@ export function FramedInput({
           <Text
             backgroundColor={theme.inverseButton ? undefined : fillColor}
             color={theme.inverseButton ? undefined : theme.dark}
-            inverse={theme.inverseButton}
+            // terminals disagree on whether `dim` reaches an inverted
+            // background — many keep it bright, splitting the dim button into
+            // gray/white/gray bands. Skip inverse while dim: the label fades
+            // with the fills as a ghost button instead
+            inverse={theme.inverseButton && !buttonDim}
             dimColor={buttonDim && theme.dimSecondary}
             bold
           >{`  ${button}  `}</Text>
